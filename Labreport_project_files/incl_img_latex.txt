@@ -1,0 +1,5 @@
+\begin{figure}[h!]
+\centering
+\caption{C.}
+\label{fig:}
+\end{figure}

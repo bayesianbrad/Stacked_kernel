@@ -1,0 +1,432 @@
+\documentclass{article}
+
+% if you need to pass options to natbib, use, e.g.:
+\PassOptionsToPackage{square,numbers}{natbib}
+% before loading nips_2016
+%
+% to avoid loading the natbib package, add option nonatbib:
+%\usepackage[nonatbib]{nips_2016}
+\usepackage{nips_2016}
+
+% to compile a camera-ready version, add the [final] option, e.g.:
+\usepackage[final]{nips_2016}
+
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+\usepackage{hyperref}       % hyperlinks
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsfonts}       % blackboard math symbols
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{microtype}      % microtypography
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{subfigure}
+%\usepackage{tikz}
+\usepackage{algorithm}
+\usepackage[noend]{algpseudocode}
+\usepackage{graphicx}
+\usepackage{subfig}
+%\usetikzlibrary{shapes,arrows}
+%% Define block styles
+%\tikzstyle{decision} = [diamond, draw, fill=blue!20, 
+%text width=4.5em, text badly centered, node distance=3cm, inner sep=0pt]
+%\tikzstyle{block} = [rectangle, draw, fill=blue!20, text width=5em, text centered, rounded corners, minimum height=4em]
+%\tikzstyle{line} = [draw, -latex']
+%\tikzstyle{cloud} = [draw, ellipse,fill=red!20, node distance=3cm,
+%minimum height=2em]
+\title{Multi-layer Stacked Gaussian Processes}
+
+% The \author macro works with any number of authors. There are two
+% commands used to separate the names and addresses of multiple
+% authors: \And and \AND.
+%
+% Using \And between authors leaves it to LaTeX to determine where to
+% break the lines. Using \AND forces a line break at that point. So,
+% if LaTeX puts 3 of 4 authors names on the first line, and the last
+% on the second line, try using \AND instead of \And before the third
+% author name.
+
+\author{
+	Bradley J.~Gram-Hansen ~Stephen J.~Roberts%\thanks{Use footnote for providing further
+%		information about author (webpage, alternative
+%		address)---\emph{not} for acknowledging funding agencies.}
+ \\
+	Department of Engineering\\
+	University of Oxford\\
+	 \\
+	\texttt{\{bradley,sjrob\}~@~robots.ox.ac.uk} \\
+	%% examples of more authors
+	%% \And
+	%% Coauthor \\
+	%% Affiliation \\
+	%% Address \\
+	%% \texttt{email} \\
+	%% \AND
+	%% Coauthor \\
+	%% Affiliation \\
+	%% Address \\
+	%% \texttt{email} \\
+	%% \And
+	%% Coauthor \\
+	%% Affiliation \\
+	%% Address \\
+	%% \texttt{email} \\
+	%% \And
+	%% Coauthor \\
+	%% Affiliation \\
+	%% Address \\
+	%% \texttt{email} \\
+}
+
+\begin{document}
+	% \nipsfinalcopy is no longer used
+	
+	\maketitle	
+	\begin{abstract}
+		In this work we explore the construction of a simple, yet effective, Gaussian process framework for supervised learning. The models that we propose take inspiration from the construction of deep Gaussian processes, as they take the form of a hierarchical multi-layered Gaussian process, with a stacked kernel. We show that with our models it is possible to get enhanced predictions, when compared to a vanilla Gaussian process. We also show, that with our framework it is possible to extract underlying structure from the data, even when using small amounts of data. We then demonstrate our models on a wide variety of data sets, to analyse both the strength and weaknesses of our architectures.
+	
+	\section{Introduction}
+	
+
+    Gaussian processes (GPs) are flexible and adaptable non-parametric Bayesian models, that are used in a plateau of domains; ranging from finance\cite{ghoshal2016extracting}, to natural language processing \cite{bratieres2013}, to modelling astronomical phenomenons \cite{rajpaul2015}, to health care  \cite{clifton2013gaussian}. One particular strength of GPs is in their analytically simplicity, which gives us clear insight into how they work and operate. For each point that is predicted with a GPs, we are given the perceived uncertainty of that prediction, which is absolutely essential for any safety critical process, such as those performed in health care \cite{clifton2013gaussian} or in the context of autonomous robots. \cite{aoude2013probabilistically} 
+    
+    
+    Inspired by the works of Duvenaud et al.\cite{duvenaud2014}, Neal \cite{neal1995} and Daminou and Lawrence \cite{damianou2013deep}, we propose two simple architectures, which allow us to gain more insight into the structure of our data. The first architecture can be seen as a multi-layered GPs regression approach with a stacked kernel, which we call the single-input model, as at each layer we only pass through the original observations. The second approach, inspired by Duvenaud et al. \cite{duvenaud2014} is multi-layered GPs regression with a stacked kernel,  where at each layer we pass through the posterior mean from the previous layer and augment it with the original observations. We call this model the augmented-input model.
+    
+    In the succeeding sections, we shall give a brief overview of Gaussian Processes section \ref{sec1}, details for the implementation and construction of both the single-input model and the augmented-input model section \ref{sec2}, and present a discussion of results section \ref{sec4}. 
+
+%	The new \LaTeX{} style file contains two optional arguments:
+%	\verb+final+, which creates a camera-ready copy, and \verb+nonatbib+,
+%	which will not load the \verb+natbib+ package for you in case of
+%	package clash.
+%	
+%	At submission time, please omit the \verb+final+ option. This will
+%	anonymize your submission and add line numbers to aid review.  Please
+%	do \emph{not} refer to these line numbers in your paper as they will
+%	be removed during generation of camera-ready copies.
+
+	\section{Gaussian processes and Kernels}
+	\label{sec1}
+	
+	In this section we discuss a formal, yet brief, introduction to GPs and in particular Gaussian process regression. In addition to that, we also provide details about different types of kernels, covariance functions, with a particular focus on those that we have used to produce the results presented in this paper. For a more complete introduction to both GPs and kernels see \cite{williams2006gaussian}. 
+	\subsection{Gaussian processes}
+	Despite the name Gaussian, GPs are not confined to modelling data which we believe has been drawn from some underlying Gaussian distribution. The very fact that they are \textit{non-parametric} models allows us to characterise rich types of behaviours due to the potentially infinite parameter space gifted to us by the kernels, subsection \ref{kernels}. This, coupled with a Bayesian framework, allows us to perform a central task in supervised machine learning, that is to learn the $\textit{function f}$, which maps a set of observables $\textbf{x} \in \mathbb{R}^{n \times D}$ to a set of targets $\textbf{y} \in \mathbb{R}^{n \times 1}$, where $n$ represents the number of observables and $D$ the dimension of the input data .
+    The functions $f(\textbf{x})$ are priors, random variables, which are drawn from the following GP:
+	\begin{equation}
+	f(\textbf{x}) \sim GP(m(\textbf{x}),	k(\textbf{x},\textbf{x}'))
+	\end{equation}
+	Formally we state that a GP is a collection of random variables, such that any \textit{finite} collection of these $f$ must follow a multivariate Gaussian distribution, which is completely specified by its mean function $\mu({\textbf{x}})$ and its covariance function, the kernel, $k(\textbf{x},\textbf{x})$:
+	\begin{align}
+	\mu(\textbf{x})& =\mathbb{E}[f(\textbf{x})]\nolabel\\
+	k(\textbf{x},\textbf{x}')& = \mathbb{E}[(f(\textbf{x}) - \mu(\textbf{x}))(f(\textbf{x}') - \mu(\textbf{x}'))^{T}]\label{eq:eqcovft}
+	\end{align}
+	As we are modelling realistic data, we can make a strong assumption that the function values that we observe are noisy and so $y = f(\textbf{x}) + \epsilon$, where $\epsilon \sim \mathcal{N}(0,\sigma^{2}_y)$ and $\sigma^{2}_{y}$ is a hyperparameter representing the noise variance. In order to perform GP regression we would like to select only the functions $f$, that agree with our observations. Thus, in the noisy scenario, given this set of functions, our observables $\textbf{x}$, and test inputs $x^{*} \in \mathbb{R}^{n^{*} \times D}$, we would like to sample the functions $f^{*}$ generated from the joint posterior distribution. This corresponds to sampling the posterior mean and covariance from the conditional of the joint prior distribution of the original observed data, augmented with the test inputs and outputs. The joint prior distribution is defined as:
+	\begin{equation}
+	\label{eq:jntprior}
+	P\left(\begin{bmatrix}\textbf{y} \\
+					       f^{*}\end{bmatrix} \right) \sim \mathcal{N}\left(\begin{bmatrix}\mu(\textbf{x}) \\
+					      \mu(x^{*})\end{bmatrix},\begin{bmatrix}k(\textbf{x},\textbf{x}) + \sigma^{2}_{y}\mathbb{I} & k(\textbf{x},x^{*}) \\
+					      k(x^{*},\textbf{x}) & \hspace{0.1mm}k(x^{*},x^{*})\end{bmatrix} \right)
+	\end{equation}
+	 Thus, conditioning equation \ref{eq:jntprior}, which means evaluating $P(f^{*} | \textbf{x}, \textbf{y}, x^{*}) = \mathcal{N}(\bar{f^{*}},\text{covar}(\bar{f^{*}}))$, allows us to extract the posterior mean, our predictions, and posterior covariance, our uncertainty in those predictions:
+	\begin{align}
+	\bar{f}^{*}& = \mu(x^{*}) + k({x^{*}},\textbf{x})[k(\textbf{x},\textbf{x}) + \sigma^{2}_n \mathbb{I}]\\
+		\text{covar}(\bar{f^{*}})& = k(x^*,x^{*}) - k(x^*,\textbf{x})[k(\textbf{x},\textbf{x}) + \sigma^{2}_{y}\mathbb{I}]^{-1}k(\textbf{x},x^*) 
+	\end{align}
+	and throughout our models we set the mean function $\mu(\textbf{x}) = \textbf{0}$. This means that $\textbf{y}$ is distributed as $\textbf{y} \sim \mathcal{N}(\textbf{0},k(\textbf{x},\textbf{x})+\sigma^{2}_{y}\mathbb{I})$
+	and so the marginal likelihood $P(\textbf{y}|\textbf{x})$, which we will require for optimising over the hyperparameters, is given by:
+	\begin{align}
+	\label{eq:eqmarlik}
+	P(\textbf{y}|\textbf{x}) = -\frac{1}{2}\textbf{y}^{T}[k(\textbf{x},\textbf{x}) + \sigma^{2}_n \mathbb{I}]^{-1}\textbf{y} - \frac{1}{2}\log|k(\textbf{x},\textbf{x}) + \sigma^{2}_n \mathbb{I}| - \frac{n}{2}\log{2\pi}
+	\end{align}
+	
+	
+	\subsection{Kernels}
+	\label{kernels}
+	Our choice of kernel and the associated hyperparameters is fundamental to how good a prediction we can make. Having the right kernel, but the wrong hyperparameters or vice versa, will lead to very poor predictions. Throughout this work we use a combination of four different kernels, which we shall describe below. The intialised values for the hyperparameters are selected at random from a uniform distribution on the interval $[a,b]$\footnote{Our interval is typically [0,1].}, unless we have strong prior knowledge about our data. The first of the kernels is the squared exponential kernel: 
+	\begin{equation}
+	\label{eq:eqse}
+	k_{SE}(x,x') = h^{2} \exp\left(-\frac{(x-x')}{2l^{2}}\right)
+	\end{equation}
+	where $l\in \mathbb{R}^{+}$ represents the length scale associated with input $x$ and $h\in \mathbb{R}^{+}$ defines the vertical scale of variations. The second is the standard periodic kernel \cite{mackay1998introduction}:
+	\begin{equation}
+	\label{eq:eqstdper}
+	k_{PER}(x,x') = h \exp \left[  - \frac{1}{2}\left( \frac{\sin^{2}(\frac{\pi}{\lambda} |x - x'| )}{l^{2}} \right) \right] 
+	\end{equation}
+	where $\lambda$ represents the period. The third is the Matern class of kernels:
+	\begin{equation}
+	\label{eq:eqmatern}
+	k_{MAT}(x,x') = \frac{2^{1-\nu}}{\Gamma(\nu)}\left(\frac{\sqrt{2\nu(x-x')}}{l}\right)^{\nu}J_{\nu}\left(\frac{\sqrt{2\nu(x-x')}}{l}\right)
+	\end{equation}
+	where $J_{\nu}$ is a modified Bessel function and $\nu = p + \frac{1}{2}$, where  $p\in \mathbb{Z}^{+}$. The fourth is the neural network kernel (multi-layer perceptron kernel) \cite{williams1997computing}:
+	\begin{equation}
+	\label{eq:eqmlp}
+	k_{MLP}(x,x') = h^{2}\frac{2}{\pi}\arcsin\left(\frac{h_w^2 x^{T}x'+h_{b}^{2}}{\sqrt{h_{w}^2x^{T} x + h^{2}_{b} + 1}\sqrt{h_{w}^2 x'^{T} x' h_b^2 +1}} \right)
+	\end{equation}
+	where $h_{w}^{2}$ represents the variances of the prior over the input weights \footnote{In general this is a vector of weights, dependent upon the dimension of your observables } and $h^{2}_{b}$ represents the variance of the prior over the bias parameters.
+	\section{Stacked kernel Gaussian processes}
+	\label{sec2}
+	Initially, for comparative purposes we designed a single-input model of the stacked kernel approach. However, to our surprise, it also delivered results which improved upon the vanilla GPs discussed in section \ref{sec1}. Both models are implemented in Python 3 using the \textit{GPy} \cite{gpy2014} package.
+	
+	\subsection{Single-input model}
+	
+	The model begins by selecting a kernel and its associated hyperparameters at random, unless we have strong prior knowledge about the data. The model then takes the observed data $\textbf{x}$ and performs Gaussian process regression to map to the target values $\textbf{y}$. It then optimises over the hyperparameters of the log marginal likelihood and predicts on the test values. Then, at the next layer $l$, we select a new kernel at random, add this to the kernel chosen in layer $l-1$ and repeat the steps above as shown in algorithm \ref{alg1}. Therefore, by the time we are in layer $i$, our kernel will be a linear combination of all previous kernels $K_{i} = \sum^{l=i}_{l=0} k_{l}$. Our priors $f$ will now be drawn from $f_{i} = \sum^{l=i}_{l=0} f_{l} \sim GP_{i}(\textbf{0},K_{i})$. The linear superposition of kernels, $\textit{additive kernels}$ \cite{duvenaud2011additive}, allows us to discover non-local structures and model richer types of behaviour.  This is due in part to a larger parameter space, which can be seen by looking at the derivative of the log marginal likelihood equation (\ref{eq:eqdirmll}). As our GP is conditioned on the previous kernels the prediction becomes: 
+	\begin{equation}
+	\bar{f_{i}^{*}} = \mathbb{E}[f^{*}_{i}| \textbf{x}, \textbf{y}_{i},x^{*},
+	K_{i}] = K_{i}(x^{*}, \textbf{x})[K_{i}(\textbf{x}, \textbf{x}) + \sigma^{2}_{y}\mathbb{I}]^{-1}\textbf{y}_{i}
+	\end{equation}
+	which has exactly the same form of the standard GP, with the exception $K$. Likewise, the posterior covariance will have the same form as that of the standard GP, except with a different substitution for the kernel and $\textbf{y}_{i}$ is distributed as $\textbf{y}_{i} \sim \mathcal{N}(\textbf{0},K_{i}(\textbf{x}, \textbf{x}) + \sigma^{2}_{y}\mathbb{I})$
+	\begin{equation}
+	\label{eq:eqdirmll}
+		\frac{\partial}{\partial{\theta_j}}\log P(\textbf{y}_{i} | \textbf{x}, \theta_{i})  = \frac{1}{2}\textbf{y}_{i}^{T}K^{-1}_{i}(\textbf{x}, \textbf{x})\frac{\partial K_{i}}{\partial{\theta_{ij}}}K_{i}^{-1}(\textbf{x}, \textbf{x})\textbf{y}_{i} - \frac{1}{2}\text{tr}(K_{i}^{-1})\frac{\partial K_{i}(\textbf{x}, \textbf{x})}{\partial{\theta_{ij}}}
+	\end{equation}  
+	 %$\textbf{y} \sim \mathcal{N}(\textbf{0},\sum^{L}_{l=0} k_{l}\sigma^{2}_n \mathbb{I} )$
+	\begin{algorithm}[H]
+		\caption{Single-input stacked GPs regression}\label{alg1}
+		\begin{algorithmic}[1]
+			\State $\textbf{Input: } \textbf{x},x^{*}, \textbf{y}_{0}, k_{0}, \theta, N, \sigma^{2}_{y}, i$
+			\For {$l = 0:i$}
+			\If {$l > 0$}
+			\State{$ K_{l} \gets K_{l-1} + k_{new}$ \Comment{$k_{new}$ is a new kernel selected at random} }
+			\Else
+			\State{$K_{l} \gets k_{0}$}
+			\EndIf
+			\State{$L\gets \text{cholesky}(K_{l}(\textbf{x},\textbf{x}) + \sigma^{2}_{y} ) $}
+			\State{$\alpha \gets L^{T}(L\backslash \textbf{y}_{l})$}
+			\State{$\bar{f_{l}}^{*}\gets K_{l}(x^{*},\textbf{x})\alpha$ \Comment{Posterior mean}}
+			\State{$ \gamma \gets L\backslash K_{l}(\textbf{x},x^{*})$}
+			\State{$ \text{covar}(\bar{f_{l}}^{*}) \gets K_{l}(x^{*},x^{*}) - \gamma^{T}\gamma$ \Comment{Posterior variance} }
+			\vspace{1mm}
+			\State{$\log{P(\textbf{y}_{l}|\textbf{x})} \gets -\frac{1}{2}\textbf{y}_{i}^{T}\alpha - Tr(\log{L})  - \frac{n}{2}\log{2\pi}$\Comment{Gaussian likelihood}}
+			\vspace{1mm}
+			\State{$\theta_{l} \gets optimise \hspace{1mm}\log{P(\textbf{y}_{l}|\textbf{x})}$}
+			\EndFor
+			\Return{${\bar{f}_{l}}^{*}$, $\text{covar}(\bar{f_{l}}^{*})$, \textbf{x}, $K_{l}$}
+		\end{algorithmic}
+	\end{algorithm}
+
+
+    \subsection{Augmented-input model}
+    
+    Compared to the single-input model, the augmented-input model is algorithmically very similar, see algorithm \ref{alg2}. However, the prior functions $f$ are no longer dependent on just the original observations, they are now also dependent on the outputs of each layer, the posterior mean. The inspiration behind this approach has come from the findings of Duvenaud et al. \cite{duvenaud2014}, who propose a method to avoid developing flat structures in deep models. They refer to this flat structure as a pathology, and propose that in order to avoid pathologies, we must ensure that we have input-connected layers. That is, we ensure at each layer that we pass through both the previous output and the original observations. Duvenaud et al.\cite{duvenaud2014} define a pathology in terms of the eigen-spectrum of the Jacobian, and state that in order to have a more dynamic data-space, you require a Jacobian with a spectrum composed of a number of large singular values after each layer. This implies with a high probability that the prior and posterior functions can evolve in more directions along our data manifold. The ability to move in multiple directions, in theory, enables us to model more dynamic behaviour. However, we find that although our covariance functions remain dynamic, our augmented-inputs model can become fixed in a particular state, that we call a $\textit{stale state}$. This happens when the derivatives of the conditional joint posterior distribution with respect to the previous layer posterior mean, tends to zero.\\
+    
+     We state, that due to the now augmented-inputs, the prior functions will be drawn from the following:
+%    
+    \begin{align*}
+    f_{0} &\sim GP_{0}(\textbf{0},k_{0}(\textbf{x}_{0},\textbf{x}_{0}))\\
+   f_{1}|\bar{f_{0}^{*}} &\sim \mathcal{GP}_{1}(\textbf{0}, k_{0}(\textbf{x}_{1},\textbf{x}_{1}) + k_{1}(\textbf{x}_{1},\textbf{x}_{1}) )\\
+   \vdots\\
+   f_{i+1}|\bar{f^{*}}_{i} &\sim \mathcal{GP}_{i}(\textbf{0},K^{A}_{i} = \sum^{N=i}_{l=0}k_{l}(\textbf{x}_{i},\textbf{x}_{i}))
+    \end{align*}
+%    
+    where $\textbf{x}_{i}$ represents the augmented $i$'th layer input. In the initial layer, $\textbf{x}_{0}$, just represents our observables. In all succeeding layers $\textbf{x}_{i} \in \mathbb{R}^{n \times (D+1)}$ represents the observations $\textbf{x}$, augmented with the previous layer output $\bar{f^{*}}_{i-1}$, see algorithm \ref{alg2} for more information. Notionally, not much has changed. However, we are now conditioning our next layer prediction on the previous layer output. Thus, the posterior mean for all layers after level 0, is given as: 
+%    
+    \begin{align}
+    \bar{f^{*}}_{l} &= \mathbb{E}[f^{*}_{l-1}| \textbf{x}, \textbf{y}_{l},x_{l}^{*},\bar{f^{*}}_{l-1},
+    K^{A}_{l}]\nonumber\\
+     &=  K^{A}_{l}(x_{l}^{*}, \textbf{x}_{l-1})[K^{A}_{l}(\textbf{x}_{l-1}, \textbf{x}_{l}) + \sigma^{2}_{y}\mathbb{I}]^{-1}\textbf{y}_{l}\label{eq:augpostmean}
+  \end{align}
+%   
+    There are some subtle points to note here, which are hidden amongst the indices. First, note that the test inputs are subscripted. This is because, after layer 0, the input data has an additional input dimension. Thus, to create the new test inputs we augment the original test inputs $x^{*}$ with the full prediction made by the GP on all of the data. Second, the targets are subscripted, just as in the single-input case, to emphersise our assumptions about how $\textbf{y}$ is distributed in each layer. In the augmented-input case, this is given by $\textbf{y}_{i} \sim \mathcal{N}(\textbf{0}, \sum^{N=i}_{l=0}k_{l}(\textbf{x}_{i},\textbf{x}_{i}) + \sigma^{2}_{y}\mathbb{I})$.\\
+    
+    As stated previously, one disadvantage of this model is when we get stuck in a stale state. This happens when the outputs and inputs become very correlated, which leads to our Gaussian processes becoming over confident in its prediction. In order to avoid this stale state, our posterior distribution must continue to change in structure, so that the following derivative is never zero $\frac{\partial \mathcal{N}(\bar{f^{*}}_{l},cov{\bar{f^{*}}_{l}})}{\partial \bar{f^{*}}_{l-1}}$. Because we see that in the predictive posterior distribution, $\mathcal{N}(\bar{f^{*}}_{l},cov{\bar{f^{*}}_{l}})$, that not only do the covariances tend to zero, but so to do the variances along the diagonals. This means that when we sample from this distribution, the mass of the probability density is heavily focused on the mean. Therefore, as the number of layers increase, we will continue to draw the same value, which means there is no more randomness as our distribution tends to a point, the value of the output of the previous layer. Thus, in order to have a dynamic derivative, we need to ensure that the probability density of each test point remains well distributed. In a GP, this ultimately lies with the choice of kernel and hyperparameters. This is alluded to by Duvenaud et al.\cite{duvenaud2014} and its importance should not be underestimated. Especially, if we want model rich structures.   
+%     This is difficult to do from a purely modelling based perspective, as it is not necessarily clear what the right parameters are, given some dataset. To approach the problem from an analytical path is also quite challenging, even in one dimension, as the likelihood function is now explicitly dependent on the posterior mean, which is implicitly dependent on the previous layer hyperparameters.  We will in section \ref{sec4} discuss a set of empirical observations about when this type of behaviour occurs and potential solutions. 
+	\begin{algorithm}[H]
+	\caption{Augmented-input stacked GPs regression}\label{alg2}
+	\begin{algorithmic}[1]
+		\State $\textbf{Input: } \textbf{x}_{0},x_{0}^{*}, \textbf{y}_{0},k_{0},\theta,N, \sigma^{2}_{y}, i$
+		\For {$l = 0:i$}
+		\If {$l > 0$}
+		\State{ $\textbf{x}_{l} \gets {\bar{f}_{l-1}}^{*}, \textbf{x}_{0}$ \Comment{the original observed values are augmented with the previous posterior}}% 
+		\State{$ K^{A}_{l} \gets K_{l-1} + k_{new}$ \Comment{$k_{new}$ is a new kernel selected at random} }
+		\Else
+		\State{$K_{l} \gets k_{0}$}
+		\EndIf
+		\State{$L\gets \text{cholesky}(K^{A}_{l}(\textbf{x}_{l},\textbf{x}_{l}) + \sigma^{2}_{y} ) $}
+		\State{$\alpha \gets L^{T}(L\backslash \textbf{y}_{l})$}
+		\State{${\bar{f}_{l}}^{*}\gets K^{A}_{l}(x_{l}^{*},\textbf{x}_{l})\alpha$ \Comment{Posterior mean}}
+		\State{$ \gamma \gets L\backslash K^{A}_{l}(\textbf{x}_{l},x_{l}^{*}) $}
+		\State{$ \text{covar}({\bar{f}_{l}}^{*}) \gets K^{A}_{l}(x_{l}^{*},x_{l}^{*}) - \gamma^{T}\gamma$ \Comment{Posterior variance} }
+		\vspace{1mm}
+		\State{$\log{P(\textbf{y}_{l}|\textbf{x}_{l})} \gets -\frac{1}{2}\textbf{y}_{l}^{T}\alpha - Tr(\log{L})  - \frac{n}{2}\log{2\pi}$\Comment{Gaussian likelihood}}
+		\vspace{1mm}
+		\State{$\theta_{l} \gets optimise \hspace{1mm}\log{P(\textbf{y}_{l}|\textbf{x}_{l})}$}
+		\EndFor
+		\Return{${\bar{f}_{l}}^{*}$, $\text{covar}(\bar{f_{l}}^{*})$, $\textbf{x}_{l}$, $K_{l}$}
+	\end{algorithmic}
+\end{algorithm}
+
+	\section{Results}
+	\label{sec4}
+	In this section we present a sub-selection of our results for both the single-input and augmented-input models\footnote{Datasets, results and code can be found on \hyperlink{https://github.com/Bjgh/Stacked_kernel_GP}{github.com/Bjgh/}}. We use a variety of data sets; currency fluctuations, stock-prices, sunspots \cite{sidc}, Weierstrass functions, Mackey-glass and heartbeat data \cite{PhysioNet}. These data sets all have interesting structures, and we apply our models to them to demonstrate both the strengths and weaknesses of the model. In general we do two tests, one using 20\% of the data set and another using 70\% of the data set, and then predict on the remaining data. Typically, we are more interested in how this model works on smaller amounts of data. In order to compare results between different models, we calculate the normalised root mean squared error (NRMSE) for all predictions made. We use the definition $NSRME  = \frac{RMSE}{max\left(\textbf{y}_{true}\right) - min\left(\textbf{y}_{true}\right)}$ to calculate the NSRME. Due to the architectures of both models, layer 0, will always represent a vanilla GP. 
+	\subsection{Weierstrass data set}
+	The Weierstrass data set generated is from a summation of the third and fifth modes of a Weierstrass function, plus some Gaussian noise. 
+	This data set is quite tricky for a vanilla GP to predict as it is incredibly volatile. For both models, there is a choice at each layer between either a SE kernel, equation (\ref{eq:eqse}), or a standard periodic kernel, equation (\ref{eq:eqstdper}) . Kernel hyperparameters are randomised for both models\footnote{We will include the relevant .csv files that store the parameters and kernels chosen, for reproducibility.}. To see how the structure in data is discovered, we show in figure \ref{pics:si_wie_s} for the single-input model, and in figure \ref{pics:aug_in_weir_s}, for the augmented-input model, how the model changes over five layers. What is quite interesting, is that even though at each layer both models selected the same kernels, we have very different behaviour. In the single-input case, what we see in layer 4 is precisely what we see in every layer before, except layer 0. What develops is a pathology, as the posterior mean remains flat in its prediction. However, in the augmented case, our model passes through information gained from the previous outputs. In this instance, it enables us to produce a much better prediction, despite having only 20\% of the data set to predict on. In addition to this, we still have a well distributed posterior covariance, which enables us to model the uncertainty as well. This isn't always the case with the augmented-input model, see figure \ref{pics:aug_in_hb_s}. 
+	\begin{figure}[ht!]
+		\centering
+				
+		\includegraphics[width=.3\textwidth]{weierstrass_si_small/resized002.png}\quad
+		\includegraphics[width=.3\textwidth]{weierstrass_si_small/resized003.png}
+		
+		
+		\includegraphics[width=.3\textwidth]{weierstrass_si_small/resized004.png}\quad
+		\includegraphics[width=.3\textwidth]{weierstrass_si_small/resized005.png}
+		
+		
+		\includegraphics[width=.3\textwidth]{weierstrass_si_small/resized000.png}\quad
+		\includegraphics[width=.3\textwidth]{weierstrass_si_small/resized001.png}
+		
+		
+		\caption{A prediction of the Weierstrass on 20\% of the data set, 200 pts, in the single-input model. The top row is a linear combination of covariance functions operating on the original observations. The middle row represents the prediction, the posterior mean is in green, the observables are in red and the targets are in blue. The bottom row is the posterior covariance at the levels 0 and 4.}
+		\label{pics:si_wie_s}
+	\end{figure}
+
+    \begin{figure}[h!]
+    	\centering
+    	\includegraphics[width=.3\textwidth]{weierstrass_small/resized003.png}\quad
+    	\includegraphics[width=.3\textwidth]{weierstrass_small/resized004.png}\quad
+    	\includegraphics[width=.3\textwidth]{weierstrass_small/resized005.png}
+    	
+    	\includegraphics[width=.3\textwidth]{weierstrass_small/resized006.png}\quad
+    	\includegraphics[width=.3\textwidth]{weierstrass_small/resized007.png}\quad
+    	\includegraphics[width=.3\textwidth]{weierstrass_small/resized008.png}
+    	
+    	\includegraphics[width=.3\textwidth]{weierstrass_small/resized000.png}\quad
+    	\includegraphics[width=.3\textwidth]{weierstrass_small/resized001.png}\quad
+    	\includegraphics[width=.3\textwidth]{weierstrass_small/resized002.png}
+    	
+    	\caption{A prediction of the Weierstrass on 20\% of the data set, 200 pts, in the augmented-input model. The top row is a linear combination of covariance functions operating on the original observations. The middle row represents the prediction, the posterior mean is in green, the observables are in red and the targets are in blue. The bottom row is the posterior covariance at the levels 0, 2 and 4.}
+    	\label{pics:aug_in_weir_s}
+    \end{figure}
+	\subsection{Heartbeat data}
+	The heartbeat time-series data is based on 950 evenly-spaced measurements of instantaneous heart rate from a single subject performing a physical activity. The measurements (in units of beats per minute) occur at 0.5 second intervals, in our scale 0.5 seconds $\equiv \frac{1}{950}$, so that the length of the series is exactly 7 minutes and 55 seconds. For the augmented case we show the output at various layers, see figure \ref{pics:aug_in_hb_s}. At each layer the model can select either the SE or standard periodic kernel. Kernel hyperparameters are chosen at random. It would be correct to say that this type of time series is not suited towards GPs. However, we show that we are able to model the more volatile aspects of the data, such as the six strong peaks, that a vanilla GP would typically struggle with, see layer 2 in figure \ref{pics:aug_in_hb_s}. Equally, with this data set we are able to highlight a particular problem with the augmented-input method, that being minimal change in the posterior means from layer to layer, cause the model to become over confident in itself and get stuck in a particular state, the stale state, as seen in layer 4 in figure \ref{pics:aug_in_hb_s}. Despite how the kernel changes, the prediction remains the same. Empirically, we find that in this dataset and others, when this stale state occurs, we have two problems. One, the GP produces a posterior covariance of values all equal to near-zero as the GP prediction becomes increasingly sure of itself. This of course dampens our efforts to model uncertainty. Two, the entries in the covariance function tend to very large values. This means that the hyperparameters, in particular the vertical scale variance hyperparameters, are also tending to large values. As the posterior mean is no longer dynamic, and as many of our kernels are part of the exponential family, we see that the distance metrics within the kernels will produce many zeros. Thus, the exponentials will be equal to one in many locations. Therefore, it is the vertical scale variance hyperparameters that will dictate the structure of the covariance function. To avoid such problems you can constrain the hyperparameters, or choose kernels that are outside the exponential family.
+	    \begin{figure}[h!]
+		\centering
+		\includegraphics[width=.3\textwidth]{heartbeat_aug_small/resized003.png}\quad
+		\includegraphics[width=.3\textwidth]{heartbeat_aug_small/resized004.png}\quad
+		\includegraphics[width=.3\textwidth]{heartbeat_aug_small/resized005.png}
+		
+		
+		\includegraphics[width=.3\textwidth]{heartbeat_aug_small/resized006.png}\quad
+		\includegraphics[width=.3\textwidth]{heartbeat_aug_small/resized007.png}\quad
+		\includegraphics[width=.3\textwidth]{heartbeat_aug_small/resized008.png}
+
+		\includegraphics[width=.3\textwidth]{heartbeat_aug_small/resized000.png}\quad
+		\includegraphics[width=.3\textwidth]{heartbeat_aug_small/resized001.png}\quad
+		\includegraphics[width=.3\textwidth]{heartbeat_aug_small/resized002.png}
+		
+		\caption{A prediction of the heartbeat time series on 20\% of the data set, 190 pts, in the augmented-input model. The top row is a linear combination of covariance functions operating on the original observations. The middle row represents the prediction, the posterior mean is in green, the observables are in red and the targets are in blue. The bottom row is the posterior covariance at the levels 0, 1 and 4. The negative values in the posterior covariance are produced by numerical errors.}
+		\label{pics:aug_in_hb_s}
+		\end{figure}
+	\subsection{Currency fluctuations data}
+	This data set is a subset of 2500 points of a 14000 point data set. Where each point represents the value of USD to EU, taken once per second for 4 hours. The data set is highly volatile, which makes predictions very difficult. For each layer the model can select from the following kernels: SE, standard periodic, MLP equation (\ref{eq:eqmlp}), the Matern $\frac{5}{2}$ ($p = 2$) or the Matern $\frac{3}{2}$ ($p = 1$) equation (\ref{eq:eqmatern}). Kernel hyperparameters are initialised at random. The augmented-input case is shown in figure \ref{aug_in_cfd_s} for layers 0, 2 and 7. Initially, a standard periodic kernel is chosen and so we have this highly repetitive structure in the prediction, which the GP seems very confident with. In layers 2 and 7, there are a few very interesting subtle points. First, notice that the prediction for the first few points, actually manges to capture some of the volatility in the data. Second, notice how the the structure of the covariance is changing. Initially, the model was very sure of itself, but as it progresses it becomes more uncertain in itself. This change in structure is due to a MLP kernel being selected in both layers 6 and 7.\\
+	The same kernels were used for the single input model, however different kernels were chosen at each level, although layer 0 was initiated with a standard periodic kernel and in layers 5,6,7 a MLP kernel is selected. In layer 8 a Matern $\frac{5}{2}$ kernel is selected, which initiates the pathology, see figure \ref{pics:si_fin_s}.
+    \begin{figure}[h!]
+		\centering
+		\includegraphics[width=.3\textwidth]{Financial_aug_small/resized008.png}\quad
+		\includegraphics[width=.3\textwidth]{Financial_aug_small/resized010.png}\quad
+		\includegraphics[width=.3\textwidth]{Financial_aug_small/resized015.png}
+		
+		\includegraphics[width=.3\textwidth]{Financial_aug_small/resized016.png}\quad
+		\includegraphics[width=.3\textwidth]{Financial_aug_small/resized018.png}\quad
+		\includegraphics[width=.3\textwidth]{Financial_aug_small/resized023.png}
+		
+		\includegraphics[width=.3\textwidth]{Financial_aug_small/resized000.png}\quad
+		\includegraphics[width=.3\textwidth]{Financial_aug_small/resized002.png}\quad
+		\includegraphics[width=.3\textwidth]{Financial_aug_small/resized007.png}
+		
+		\caption{A prediction of the Forex exchange of USD to EUR on 20\% of the data set, 500 pts, in the augmented-input model. The top row is a linear combination of covariance functions operating on the original observations. The middle row represents the prediction, the posterior mean is in green, the observables are in red and the targets are in blue. The bottom row is the posterior covariance at the levels 0, 2 and 7.}
+		\label{pics:aug_in_cfd_s}
+	\end{figure}
+	\begin{figure}[h!]
+	\centering
+	
+	\includegraphics[width=.3\textwidth]{Financial_si_small/resized003.png}\quad
+	\includegraphics[width=.3\textwidth]{Financial_si_small/resized004.png}\quad
+	\includegraphics[width=.3\textwidth]{Financial_si_small/resized005.png}
+	
+	\includegraphics[width=.3\textwidth]{Financial_si_small/resized006.png}\quad
+	\includegraphics[width=.3\textwidth]{Financial_si_small/resized007.png}\quad
+	\includegraphics[width=.3\textwidth]{Financial_si_small/resized008.png}
+
+	\includegraphics[width=.3\textwidth]{Financial_si_small/resized000.png}\quad
+	\includegraphics[width=.3\textwidth]{Financial_si_small/resized001.png}\quad
+	\includegraphics[width=.3\textwidth]{Financial_si_small/resized002.png}
+	
+	\caption{A prediction of the Forex exchange of USD to EUR on 20\% of the data set, 500 pts, in the single-input model. The top row is a linear combination of covariance functions operating on the original observations. The middle row represents the prediction, the posterior mean is in green, the observables are in red and the targets are in blue. The bottom row is the posterior covariance at the levels 0, 7 and 8.}
+	\label{pics:si_fin_s}
+\end{figure}
+ 	\subsection{Stock data}
+ 	This data set is comprised of 20 different stocks and contains 5000 days worth of opening and closing values, of particular companies. We only use 1000 days worth of data, 1994 to 1997. Again, as the data itself is highly volatile, it makes it difficult to predict future points using a vanilla GP. For this data set, each model can choose from either the SE, standard periodic or Matern $\frac{3}{2}$ ($p=1$) kernel. The kernel hyperparameters are randomised.  In running the single-input model on this data set, we find that we get an enhanced prediction, as compared to a vanilla GP, see figure \ref{pics:stock_si_large}. We see that in layer 0, the GP layer, a Matern $\frac{3}{2}$ kernel is selected and it manages to model the next 11 time points in the future relatively well. Then it receives a boost in layer 2 from a SE kernel, which directs it on a upward trend. But, keeps the prediction smooth. In layer 3, the model selects a Matern $p=\frac{3}{2}$ kernel again, which adds a a little volatility to the prediction. It then selects four standard periodic kernels, which amplify this effect. Creating this kind of structure, given the already seen data, with a vanilla GP would be difficult. But, due to the additive nature of the kernels in the single-input model, we are able to create these structures.  
+    \begin{figure}[h!]
+ 		\centering
+ 		\includegraphics[width=.3\textwidth]{stock_si_large/resized003.png}\quad
+ 		\includegraphics[width=.3\textwidth]{stock_si_large/resized004.png}\quad
+ 		\includegraphics[width=.3\textwidth]{stock_si_large/resized005.png} 		
+ 		
+ 		\includegraphics[width=.3\textwidth]{stock_si_large/resized006.png}\quad
+ 		\includegraphics[width=.3\textwidth]{stock_si_large/resized007.png}\quad
+ 		\includegraphics[width=.3\textwidth]{stock_si_large/resized008.png}
+ 		
+ 		\includegraphics[width=.3\textwidth]{stock_si_large/resized000.png}\quad
+ 		\includegraphics[width=.3\textwidth]{stock_si_large/resized001.png}\quad
+ 		\includegraphics[width=.3\textwidth]{stock_si_large/resized002.png}
+ 		
+ 		\caption{A prediction of Merck \& Co (ticker: MRK) opening stock price on 70\% of the data set, 700 pts, in the single-input model. The top row is a linear combination of covariance functions operating on the original observations. The middle row represents the prediction, the posterior mean is in green, the observables are in red and the targets are in blue. The bottom row is the posterior covariance at the levels 0, 2 and 6. }
+ 		\label{pics:stock_si_large}
+ 	\end{figure}
+%	\subsection{Sunspot data}
+%	The sunspot data comprises of 2899 points, each of which represents the number of sunspots spotted within a month. The time frame is from 1750-1990. This data set although noisy, has a clear periodic structure. That is, there is a 11-12 year cycle, in which we a large increase in sunspot activity and then a sudden decrease. For each layer the model could choice from either the SE or standard periodic kernel. See figure \ref{pics:si_ss_s}   
+%	\begin{figure}[ht!]
+%	\centering
+%	
+%	\includegraphics[width=.3\textwidth]{sunspot_si_small/resized002.png}\quad
+%	\includegraphics[width=.3\textwidth]{sunspot_si_small/resized003.png}
+%	
+%	\medskip
+%	
+%	\includegraphics[width=.3\textwidth]{sunspot_si_small/resized004.png}\quad
+%	\includegraphics[width=.3\textwidth]{sunspot_si_small/resized005.png}
+%	
+%	\medskip
+%	
+%	\includegraphics[width=.3\textwidth]{sunspot_si_small/resized000.png}\quad
+%	\includegraphics[width=.3\textwidth]{sunspot_si_small/resized001.png}
+%	
+%	
+%	\caption{A prediction of the Sunspot data set on 20\% of the training data, 579 pts, in the single-input model. The top row is the combined covariance function on the new inputs, in layer 0 that is the original observations. The middle row represents the prediction, posterior mean, in green, the testing targets are in blue and the training targets are in red. The bottom row is the posterior covariance at the levels 0 and 4. It should noted that there are multiple faint diagonal lines in the posterior covariance, which may be hard to see from the image. }
+%	\label{pics:si_ss_s}
+%\end{figure}
+ \subsection{Mackay-glass data}
+ The Mackay-Glass equation is a non-linear time delay differential equation, that can generate complex dynamics and is particularly useful in physiological feedback systems. A vanilla GP, with a standard periodic kernel and the right hyperparameters, for example $h =0.6$ and $l = 0.1$, will give you a relatively good prediction.  However, with the augmented-inputs model we are able to generate not only a good prediction, but some very interesting behaviour, see figure \ref{pics:aug_in_Mg_s}. At each layer we only allow the model to select a standard periodic kernel, with randomised kernel hyperparameters. Initially, in layer 0, we generate a flat prediction, this is due to having selected a large lengthscale $l$. However, in layer 1 we begin to generate more interesting structure, which leads us to some rather odd, but dynamic structure in layer 2. From the covariance function, you can see that whilst the values remain low, which is required for a dynamic posterior mean, we have this beautiful structure. We then progress further, and find that at layer 4 the model is starting to get the right phase and structure of the data. This leads to a fascinating covariance function. Where, we have coming off the diagonal, numerous small and well distributed values, which is difficult to see from afar. 
+ 	\begin{figure}[h!]
+ 	\centering
+ 	\includegraphics[width=.3\textwidth]{Mcglass_aug_small/resized005.png}\quad
+ 	\includegraphics[width=.3\textwidth]{Mcglass_aug_small/resized007.png}\quad
+ 	\includegraphics[width=.3\textwidth]{Mcglass_aug_small/resized009.png}
+ 	
+ 	
+ 	\includegraphics[width=.3\textwidth]{Mcglass_aug_small/resized011.png}\quad
+ 	\includegraphics[width=.3\textwidth]{Mcglass_aug_small/resized013.png}\quad
+ 	\includegraphics[width=.3\textwidth]{Mcglass_aug_small/resized015.png}
+ 	
+ 	\includegraphics[width=.3\textwidth]{Mcglass_aug_small/resized000.png}\quad
+ 	\includegraphics[width=.3\textwidth]{Mcglass_aug_small/resized002.png}\quad
+ 	\includegraphics[width=.3\textwidth]{Mcglass_aug_small/resized004.png}
+ 	
+ 	\caption{A prediction on 20\% of the Mackay-glass data, 200 pts, in the augmented-input model. The top row is a linear combination of covariance functions operating on the original observations. The middle row represents the prediction, the posterior mean is in green, the observables are in red and the targets are in blue. The bottom row is the posterior covariance at the levels 0, 2 and 4. The negative values in the posterior covariance are produced by numerical errors.}
+ 	\label{pics:aug_in_Mg_s}
+ \end{figure}
+ \section{Conclusions}
+	\label{sec5}
+	In this work we have presented two models, the single-input and the augmented-input model. We have shown that both models can model real world data using a stacked kernel approach and can outperform that of a vanilla Gaussian process. We have shown empirically that both models can find underlying structure in the data, even for small data sets. We have shown that for our augmented model, the theorems prescribed in Duvenaud et al. \cite{duvenaud2014} do not necessarily hold for the augmented-input model that we have designed. We have discussed how we may avoid stale states from occurring. For future work, we aim to derive analytically a more robust approach for avoiding stale states.
+%
+\newpage
+\small
+\bibliography{mini_proj}
+\bibliographystyle{ieeetr}
+%\bibliographystyle{unsrtnat}
+
+	
+\end{document}
